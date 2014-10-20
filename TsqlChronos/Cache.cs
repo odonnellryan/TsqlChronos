@@ -27,7 +27,7 @@ namespace TsqlChronos
 
             foreach (var entry in allEntries)
             {
-                if (Analyzer.IsInvalidated(entry, statement))
+                if (Judge.IsGuilty(entry, statement))
                     entry.Convicted();
                 else
                     entry.Acquited();

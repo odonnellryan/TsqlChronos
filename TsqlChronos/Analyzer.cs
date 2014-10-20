@@ -5,31 +5,30 @@ using System;
 
 namespace TsqlChronos
 {
-    internal sealed class Evidence
+    public class Evidence
     {
-        internal sealed class BooleanEvals : Dictionary<string, Dictionary<string, List<string>>>
+        public class BooleanEvals : Dictionary<string, Dictionary<string, List<string>>>
         {
-            // Example of use: { {"Column_A", {">", ["10","11"] } } }
+            // Example of use: { {"Column_A", {"GreaterThan", ["10","11"] } } }
         }
         // we'll make the "ands" implicit, but we'll "split" each time we encounter an "or" statement.
         // Logic is that we'll loop through the below list and execute all the operators
         // should be good
         // maybe.... 
-        List<BooleanEvals> BooleanEvalsCollection { get; set; }
-        List<QuerySpecification> querySpecs { get; set; }
+        public List<BooleanEvals> BooleanEvalsCollection = new List<BooleanEvals>();
+        public List<QuerySpecification> querySpecs = new List<QuerySpecification>();
         // hashset because it is my favorite
-        HashSet<string> referencedTables { get; set; }
-        HashSet<string> referencedColumns { get; set; }
+        public HashSet<string> referencedTables = new HashSet<string>();
+        public HashSet<string> referencedColumns = new HashSet<string>();
 
-        private void GatherEvidence(List<TSqlFragment> fragments)
+        public void GatherEvidence(IEnumerable<TSqlFragment> fragments)
         {
             foreach (var fragment in fragments)
             {
                 if (fragment is WhereClause)
                 {
                     var whereClause = fragment as WhereClause;
-                    var booleanEx = whereClause.SearchCondition as BooleanBinaryExpression;
-                    handleBooleanBinaryExpression(booleanEx);
+                    handleWhereClause(whereClause);
                 }
                 if (fragment is NamedTableReference)
                 {
@@ -47,29 +46,21 @@ namespace TsqlChronos
                     querySpecs.Add(querySpec);
                 }
             }
-
         }
 
         private void handleBooleanBinaryExpression(BooleanBinaryExpression clause, int index = 0)
         {
             int firstIndex, secondIndex;
-            if (clause.BinaryExpressionType == (BooleanBinaryExpressionType) BinaryExpressionType.BitwiseOr)
+            var testing = clause;
+            if (clause.BinaryExpressionType.GetType().GetProperty("BitwiseOr") != null)
             {
-                // this will add unneeded dicts, i think. oh well.
-                BooleanEvalsCollection.Add(null);
                 BooleanEvalsCollection.Add(null);
                 firstIndex = BooleanEvalsCollection.Count - 2;
                 secondIndex = BooleanEvalsCollection.Count - 1;
             }
-            else if (index == 0 && BooleanEvalsCollection.Count == 0)
+            else if (clause.BinaryExpressionType.GetType().GetProperty("BitwiseAnd") != null)
             {
-                BooleanEvalsCollection.Add(null);
-                firstIndex = secondIndex = BooleanEvalsCollection.Count - 1;
-            }
-            else if (clause.BinaryExpressionType == (BooleanBinaryExpressionType) BinaryExpressionType.BitwiseAnd)
-            {
-                BooleanEvalsCollection.Add(null);
-                firstIndex = secondIndex = BooleanEvalsCollection.Count - 1;
+                firstIndex = secondIndex = index;
             }
             else
             {
@@ -119,38 +110,66 @@ namespace TsqlChronos
 
         private void handleWhereClause(WhereClause whereClause) 
         {
+            BooleanEvalsCollection.Add(null);
+            int index = BooleanEvalsCollection.Count - 1;
             if (whereClause.SearchCondition is BooleanBinaryExpression)
             {
                 BooleanBinaryExpression boolBinEx = whereClause.SearchCondition as BooleanBinaryExpression;
-                handleBooleanBinaryExpression(boolBinEx);
+                handleBooleanBinaryExpression(boolBinEx, index);
             }
-            if (whereClause.SearchCondition is BooleanBinaryExpression)
+            if (whereClause.SearchCondition is BooleanComparisonExpression)
             {
-                BooleanBinaryExpression boolBinEx = whereClause.SearchCondition as BooleanBinaryExpression;
-                handleBooleanBinaryExpression(boolBinEx);
+                BooleanComparisonExpression boolCompEx = whereClause.SearchCondition as BooleanComparisonExpression;
+                handleBooleanComparisonExpression(boolCompEx, index);
             }
-            if (whereClause.SearchCondition is BooleanBinaryExpression)
+            if (whereClause.SearchCondition is LikePredicate)
             {
-                BooleanBinaryExpression boolBinEx = whereClause.SearchCondition as BooleanBinaryExpression;
-                handleBooleanBinaryExpression(boolBinEx);
+                LikePredicate likePredicate = whereClause.SearchCondition as LikePredicate;
+                handleLikePredicate(likePredicate, index);
             }
-            if (whereClause.SearchCondition is BooleanBinaryExpression)
+            if (whereClause.SearchCondition is InPredicate)
             {
-                BooleanBinaryExpression boolBinEx = whereClause.SearchCondition as BooleanBinaryExpression;
-                handleBooleanBinaryExpression(boolBinEx);
+                InPredicate inPredicate = whereClause.SearchCondition as InPredicate;
+                handleInPredicate(inPredicate, index);
             }
-            handleChildExpressions<BooleanExpression>(whereClause.SearchCondition);
-        }
-
-        private void handleChildExpressions<T>(T clause) where T : BooleanExpression
-        {
-            
         }
 
         private void handleBooleanComparisonExpression(BooleanComparisonExpression boolCompEx, int index)
         {
+            string columnName = null;
+            if (boolCompEx.FirstExpression is ColumnReferenceExpression)
+            {
+                ColumnReferenceExpression firstEx = boolCompEx.FirstExpression as ColumnReferenceExpression;
+                columnName = firstEx.MultiPartIdentifier.Identifiers[0].Value;
+            }
+            if (boolCompEx.FirstExpression is StringLiteral)
+            {
+                StringLiteral firstEx = boolCompEx.FirstExpression as StringLiteral;
+                columnName = firstEx.Value;
+            }
+            if (boolCompEx.FirstExpression is IntegerLiteral)
+            {
+                IntegerLiteral firstEx = boolCompEx.FirstExpression as IntegerLiteral;
+                columnName = firstEx.Value.ToString();
+            }
+            string element = null;
+            if (boolCompEx.SecondExpression is ColumnReferenceExpression)
+            {
+                ColumnReferenceExpression secondEx = boolCompEx.SecondExpression as ColumnReferenceExpression;
+                element = secondEx.MultiPartIdentifier.Identifiers[0].Value;
+            }
+            if (boolCompEx.SecondExpression is StringLiteral)
+            {
+                StringLiteral secondEx = boolCompEx.SecondExpression as StringLiteral;
+                element = secondEx.Value;
+            }
+            if (boolCompEx.SecondExpression is IntegerLiteral)
+            {
+                IntegerLiteral secondEx = boolCompEx.SecondExpression as IntegerLiteral;
+                element = secondEx.Value.ToString();
+            }
             string _operator = boolCompEx.ComparisonType.ToString();
-
+            handleDictUpdate(columnName, _operator, element, index);
         }
 
         private void handleInPredicate(InPredicate inPredicate, int index)
@@ -181,7 +200,11 @@ namespace TsqlChronos
 
         private void handleDictUpdate(string columnName, string _operator, string element, int index)
         {
-            // Example dictionary: { {"Column_A", {">", ["10","11"] } } }
+            // Example dictionary: { {"Column_A", {"GreaterThan", ["10","11"] } } }
+            if (!BooleanEvalsCollection[index])
+            {
+                BooleanEvalsCollection[index][columnName] = new Dictionary<string, List<string>>();
+            }
             if (!BooleanEvalsCollection[index].ContainsKey(columnName))
             {
                 BooleanEvalsCollection[index][columnName] = new Dictionary<string, List<string>>();
@@ -192,7 +215,6 @@ namespace TsqlChronos
             }
             BooleanEvalsCollection[index][columnName][_operator].Add(element);
         }
-
     }
 
     internal sealed class Judge
@@ -201,19 +223,6 @@ namespace TsqlChronos
         {
             SelectStatement selectStatement = entry.Statement;
             return true;
-        }
-
-        private static Evidence BreakdownSingleSelect(SelectStatement statements)
-        {
-            Evidence evidence = new Evidence();
-            Console.WriteLine(evidence);
-            return evidence;
-        }
-
-        private static Dictionary<string, List<string>> BreakdownWhereClause(WhereClause whereClause)
-        {
-            Dictionary<string, List<string>> booleanEvals = new Dictionary<string, List<string>>();
-            return booleanEvals;
         }
 
     }
