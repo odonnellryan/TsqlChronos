@@ -51,14 +51,14 @@ namespace TsqlChronos
         private void handleBooleanBinaryExpression(BooleanBinaryExpression clause, int index = 0)
         {
             int firstIndex, secondIndex;
-            var testing = clause;
-            if (clause.BinaryExpressionType.GetType().GetProperty("BitwiseOr") != null)
+            BooleanBinaryExpressionType clause2 = (BooleanBinaryExpressionType)clause.BinaryExpressionType;
+            if (clause.BinaryExpressionType.ToString() == "Or")
             {
-                BooleanEvalsCollection.Add(null);
+                BooleanEvalsCollection.Add(new BooleanEvals());
                 firstIndex = BooleanEvalsCollection.Count - 2;
                 secondIndex = BooleanEvalsCollection.Count - 1;
             }
-            else if (clause.BinaryExpressionType.GetType().GetProperty("BitwiseAnd") != null)
+            else if (clause.BinaryExpressionType.ToString() == "And")
             {
                 firstIndex = secondIndex = index;
             }
@@ -81,9 +81,9 @@ namespace TsqlChronos
                 BooleanComparisonExpression firstEx = (BooleanComparisonExpression)clause.FirstExpression;
                 handleBooleanComparisonExpression(firstEx, firstIndex);
             }
-            if (clause.FirstExpression is BooleanComparisonExpression)
+            if (clause.SecondExpression is BooleanComparisonExpression)
             {
-                BooleanComparisonExpression secondEx = (BooleanComparisonExpression)clause.FirstExpression;
+                BooleanComparisonExpression secondEx = (BooleanComparisonExpression)clause.SecondExpression;
                 handleBooleanComparisonExpression(secondEx, secondIndex);
             }
             if (clause.FirstExpression is InPredicate)
@@ -110,7 +110,7 @@ namespace TsqlChronos
 
         private void handleWhereClause(WhereClause whereClause) 
         {
-            BooleanEvalsCollection.Add(null);
+            BooleanEvalsCollection.Add(new BooleanEvals());
             int index = BooleanEvalsCollection.Count - 1;
             if (whereClause.SearchCondition is BooleanBinaryExpression)
             {
@@ -201,10 +201,6 @@ namespace TsqlChronos
         private void handleDictUpdate(string columnName, string _operator, string element, int index)
         {
             // Example dictionary: { {"Column_A", {"GreaterThan", ["10","11"] } } }
-            if (!BooleanEvalsCollection[index])
-            {
-                BooleanEvalsCollection[index][columnName] = new Dictionary<string, List<string>>();
-            }
             if (!BooleanEvalsCollection[index].ContainsKey(columnName))
             {
                 BooleanEvalsCollection[index][columnName] = new Dictionary<string, List<string>>();

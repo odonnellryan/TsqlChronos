@@ -15,7 +15,11 @@ namespace TsqlChronos.Tests
         {
             var SQLQuery = @"SELECT order_id
                             FROM suppliers 
-                            WHERE a > 3";
+                            WHERE a > 3
+                            AND b < 3
+                            OR a < 5
+                            AND b > 3
+                            OR c < 4";
 
             var sql = SqlParser.Parse(SQLQuery);
             var fragments = SqlUtil.EnumerateAll(sql);
