@@ -24,6 +24,8 @@ namespace TsqlChronos
         private Mutex lck = new Mutex(false);
         private ResultSet CacheSet;
 
+        public Evidence evidence;
+
         public CacheEntryState State { get; private set; }
 
 
